@@ -1,11 +1,13 @@
 // app/api/admin/decisions/[id]/route.ts
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { query } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
-type Params = { params: { id: string } };
+type RouteContext = {
+  params: { id: string } | Promise<{ id: string }>;
+};
 
-export async function DELETE(_req: Request, { params }: Params) {
+export async function DELETE(_req: NextRequest, context: RouteContext) {
   const user = await requireUser();
   if (!user || user.role !== "developer") {
     return NextResponse.json(
@@ -14,19 +16,17 @@ export async function DELETE(_req: Request, { params }: Params) {
     );
   }
 
-  const id = Number(params.id);
-  if (!id || Number.isNaN(id)) {
-    return NextResponse.json(
-      { error: "ID inválido." },
-      { status: 400 }
-    );
+  const { id } = await context.params;
+  const numericId = Number(id);
+  if (!numericId || Number.isNaN(numericId)) {
+    return NextResponse.json({ error: "ID inválido." }, { status: 400 });
   }
 
-  await query(`DELETE FROM decisions WHERE id = $1`, [id]);
+  await query(`DELETE FROM decisions WHERE id = $1`, [numericId]);
   return NextResponse.json({ ok: true });
 }
 
-export async function PUT(req: Request, { params }: Params) {
+export async function PUT(req: NextRequest, context: RouteContext) {
   const user = await requireUser();
   if (!user || user.role !== "developer") {
     return NextResponse.json(
@@ -35,12 +35,10 @@ export async function PUT(req: Request, { params }: Params) {
     );
   }
 
-  const id = Number(params.id);
-  if (!id || Number.isNaN(id)) {
-    return NextResponse.json(
-      { error: "ID inválido." },
-      { status: 400 }
-    );
+  const { id } = await context.params;
+  const numericId = Number(id);
+  if (!numericId || Number.isNaN(numericId)) {
+    return NextResponse.json({ error: "ID inválido." }, { status: 400 });
   }
 
   const body = await req.json();
@@ -48,7 +46,12 @@ export async function PUT(req: Request, { params }: Params) {
     title: string;
     description?: string;
     status: string;
-    options: { id?: number; label: string; image_url?: string; sort_order?: number }[];
+    options: {
+      id?: number;
+      label: string;
+      image_url?: string;
+      sort_order?: number;
+    }[];
   };
 
   await query(
@@ -59,11 +62,13 @@ export async function PUT(req: Request, { params }: Params) {
         status = $3
     WHERE id = $4
     `,
-    [title, description || null, status, id]
+    [title, description || null, status, numericId]
   );
 
   // para simplificar: apaga opções antigas e recria
-  await query(`DELETE FROM decision_options WHERE decision_id = $1`, [id]);
+  await query(`DELETE FROM decision_options WHERE decision_id = $1`, [
+    numericId,
+  ]);
 
   for (let i = 0; i < options.length; i++) {
     const opt = options[i];
@@ -72,7 +77,7 @@ export async function PUT(req: Request, { params }: Params) {
       INSERT INTO decision_options (decision_id, label, image_url, sort_order)
       VALUES ($1, $2, $3, $4)
       `,
-      [id, opt.label, opt.image_url || null, opt.sort_order ?? i]
+      [numericId, opt.label, opt.image_url || null, opt.sort_order ?? i]
     );
   }
 

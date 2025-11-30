@@ -1,14 +1,15 @@
 // app/api/decisions/[id]/approve/route.ts
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { query } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
-type RouteParams = {
-  params: { id: string };
+type RouteContext = {
+  params: { id: string } | Promise<{ id: string }>;
 };
 
-export async function POST(req: Request, { params }: RouteParams) {
-  const decisionId = Number(params.id);
+export async function POST(req: NextRequest, context: RouteContext) {
+  const { id } = await context.params;
+  const decisionId = Number(id);
   if (!decisionId || Number.isNaN(decisionId)) {
     return NextResponse.json(
       { error: "ID de decisão inválido." },
